@@ -12,15 +12,6 @@ from typing import (  # noqa: F401
 )
 
 
-class Subscription:
-
-    def __init__(self, unsubscribe_fn: Callable[[], Any]) -> None:
-        self._unsubscribe_fn = unsubscribe_fn
-
-    def unsubscribe(self) -> None:
-        self._unsubscribe_fn()
-
-
 class BroadcastConfig:
 
     def __init__(self,

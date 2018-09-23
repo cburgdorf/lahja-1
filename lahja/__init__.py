@@ -11,5 +11,4 @@ from .misc import (  # noqa: F401
     BaseEvent,
     BaseRequestResponseEvent,
     BroadcastConfig,
-    Subscription,
 )

@@ -5,7 +5,10 @@ from setuptools import (
     find_packages,
 )
 
-extras_require = {
+deps = {
+    'lahja': [
+        "asyncio-cancel-token==0.1.0a2",
+    ],
     'test': [
         "pytest==3.3.2",
         "pytest-asyncio==0.8.0",
@@ -30,12 +33,15 @@ extras_require = {
     ],
 }
 
-extras_require['dev'] = (
-    extras_require['dev'] +
-    extras_require['test'] +
-    extras_require['lint'] +
-    extras_require['doc']
+deps['dev'] = (
+    deps['lahja'] +
+    deps['dev'] +
+    deps['test'] +
+    deps['lint'] +
+    deps['doc']
 )
+
+install_requires = deps['lahja']
 
 setup(
     name='lahja',
@@ -47,10 +53,10 @@ setup(
     author_email='christoph.burgdorf@gmail.com',
     url='https://github.com/ethereum/lahja',
     include_package_data=True,
-    install_requires=[],
+    install_requires=install_requires,
     setup_requires=['setuptools-markdown'],
     python_requires='>=3.5, <4',
-    extras_require=extras_require,
+    extras_require=deps,
     py_modules=['lahja'],
     license="MIT",
     zip_safe=False,

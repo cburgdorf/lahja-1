@@ -4,6 +4,9 @@ from typing import (
     Type,
 )
 
+from cancel_token import (
+    CancelToken,
+)
 import pytest
 
 from lahja import (
@@ -31,6 +34,69 @@ class DummyRequestPair(BaseRequestResponseEvent[DummyResponse]):
     @staticmethod
     def expected_response_type() -> Type[DummyResponse]:
         return DummyResponse
+
+
+@pytest.mark.asyncio
+async def test_can_unsubscribe() -> None:
+    bus = EventBus()
+    endpoint = bus.create_endpoint('test')
+    bus.start()
+    endpoint.connect()
+
+    cancel_token = endpoint.subscribe(
+        DummyRequestPair,
+        lambda ev: endpoint.broadcast(
+            # Accessing `ev.property_of_dummy_request_pair` here allows us to validate
+            # mypy has the type information we think it has. We run mypy on the tests.
+            DummyResponse(ev.property_of_dummy_request_pair), ev.broadcast_config()
+        )
+    )
+
+    # This is just to prove that we are getting answers when subscribed
+    response1 = await endpoint.request(DummyRequestPair())
+    assert isinstance(response1, DummyResponse)
+
+    cancel_token.trigger()
+
+    # This would hang forever because we unsubscribed
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(endpoint.request(DummyRequestPair()), timeout=0.1)
+
+    endpoint.stop()
+    bus.stop()
+
+
+@pytest.mark.asyncio
+async def test_can_unsubscribe_with_passed_token() -> None:
+    bus = EventBus()
+    endpoint = bus.create_endpoint('test')
+    bus.start()
+    endpoint.connect()
+
+    parent_cancel_token = CancelToken('parent')
+
+    endpoint.subscribe(
+        DummyRequestPair,
+        lambda ev: endpoint.broadcast(
+            # Accessing `ev.property_of_dummy_request_pair` here allows us to validate
+            # mypy has the type information we think it has. We run mypy on the tests.
+            DummyResponse(ev.property_of_dummy_request_pair), ev.broadcast_config()
+        ),
+        parent_cancel_token
+    )
+
+    # This is just to prove that we are getting answers when subscribed
+    response1 = await endpoint.request(DummyRequestPair())
+    assert isinstance(response1, DummyResponse)
+
+    parent_cancel_token.trigger()
+
+    # This would hang forever because we unsubscribed
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(endpoint.request(DummyRequestPair()), timeout=0.1)
+
+    endpoint.stop()
+    bus.stop()
 
 
 @pytest.mark.asyncio

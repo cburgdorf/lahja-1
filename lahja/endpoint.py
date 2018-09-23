@@ -16,10 +16,15 @@ from typing import (  # noqa: F401
 )
 import uuid
 
+from cancel_token import (
+    CancelToken,
+)
+
 from .async_util import (
     async_get,
 )
 from .exceptions import (
+    NoConnection,
     UnexpectedResponse,
 )
 from .misc import (
@@ -27,7 +32,6 @@ from .misc import (
     BaseEvent,
     BaseRequestResponseEvent,
     BroadcastConfig,
-    Subscription,
 )
 
 
@@ -46,14 +50,25 @@ class Endpoint:
         self._queues: Dict[Type[BaseEvent], List[asyncio.Queue]] = {}
         self._running = False
         self._executor: Optional[ThreadPoolExecutor] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        if self._loop is None:
+            raise NoConnection("Need to call `connect()` first")
+
+        return self._loop
 
     def connect(self, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
         Connect the :class:`~lahja.endpoint.Endpoint` to the :class:`~lahja.eventbus.EventBus`
         instance that created this endpoint.
         """
-        # mypy doesn't recognize loop as Optional[AbstractEventLoop].
-        asyncio.ensure_future(self._try_connect(loop), loop=loop)  # type: ignore
+        if (loop is None):
+            loop = asyncio.get_event_loop()
+
+        self._loop = loop
+        asyncio.ensure_future(self._try_connect(loop), loop=loop)
 
     async def _try_connect(self, loop: asyncio.AbstractEventLoop) -> None:
         # We need to handle exceptions here to not get `Task exception was never retrieved`
@@ -148,7 +163,8 @@ class Endpoint:
 
     def subscribe(self,
                   event_type: Type[TSubscribeEvent],
-                  handler: Callable[[TSubscribeEvent], None]) -> Subscription:
+                  handler: Callable[[TSubscribeEvent], None],
+                  cancel_token: Optional[CancelToken] = None) -> CancelToken:
         """
         Subscribe to receive updates for any event that matches the specified event type.
         A handler is passed as a second argument an :class:`~lahja.misc.Subscription` is returned
@@ -161,7 +177,26 @@ class Endpoint:
 
         self._handler[event_type].append(casted_handler)
 
-        return Subscription(lambda: self._handler[event_type].remove(casted_handler))
+        token = self._chain_or_create_cancel_token(f'subscribe#{event_type}', cancel_token)
+
+        asyncio.ensure_future(self._run_when_triggered(
+            token,
+            lambda: self._handler[event_type].remove(casted_handler)
+        ), loop=self.loop)
+
+        return token
+
+    async def _run_when_triggered(self, token: CancelToken, handler: Callable[..., Any]) -> None:
+        await token.wait()
+        handler()
+
+    def _chain_or_create_cancel_token(self,
+                                      token_name: str,
+                                      token: Optional[CancelToken] = None) -> CancelToken:
+
+        return (CancelToken(token_name).chain(token)
+                if token is not None else
+                CancelToken(token_name))
 
     TStreamEvent = TypeVar('TStreamEvent', bound=BaseEvent)
 
@@ -203,3 +238,7 @@ class Endpoint:
         # mypy thinks we are missing a return statement but this seems fair to do
         async for event in self.stream(event_type, max=1):
             return event
+
+    def _raise_if_loop_missing(self) -> None:
+        if self._loop is None:
+            raise NoConnection("Need to call `connect()` first")
