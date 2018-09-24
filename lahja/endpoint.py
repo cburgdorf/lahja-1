@@ -137,7 +137,9 @@ class Endpoint:
 
     TResponse = TypeVar('TResponse', bound=BaseEvent)
 
-    async def request(self, item: BaseRequestResponseEvent[TResponse]) -> TResponse:
+    async def request(self,
+                      item: BaseRequestResponseEvent[TResponse],
+                      cancel_token: Optional[CancelToken] = None) -> TResponse:
         """
         Broadcast an instance of :class:`~lahja.misc.BaseEvent` on the event bus and immediately
         wait on an expected answer of type :class:`~lahja.misc.BaseEvent`.
@@ -150,7 +152,13 @@ class Endpoint:
 
         self._sending_queue.put_nowait((item, None))
 
-        result = await future
+        token = self._chain_or_create_cancel_token(f'request#{item}', cancel_token)
+
+        try:
+            result = await token.cancellable_wait(future)
+        except OperationCancelled as e:
+            del self._futures[item._id]
+            raise e
 
         expected_response_type = item.expected_response_type()
         if not isinstance(result, expected_response_type):

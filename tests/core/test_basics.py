@@ -6,6 +6,7 @@ from typing import (
 
 from cancel_token import (
     CancelToken,
+    OperationCancelled,
 )
 import pytest
 
@@ -116,11 +117,41 @@ async def test_request() -> None:
         )
     )
 
-    response = await endpoint.request(DummyRequestPair())
+    item = DummyRequestPair()
+    response = await endpoint.request(item)
     # Accessing `ev.property_of_dummy_response` here allows us to validate
     # mypy has the type information we think it has. We run mypy on the tests.
     print(response.property_of_dummy_response)
     assert isinstance(response, DummyResponse)
+
+    # Ensure the registration was cleaned up
+    assert item._id not in endpoint._futures
+
+    endpoint.stop()
+    bus.stop()
+
+
+@pytest.mark.asyncio
+async def test_request_with_cancellation() -> None:
+    event_loop = asyncio.get_event_loop()
+    bus = EventBus()
+    endpoint = bus.create_endpoint('test')
+    bus.start()
+    endpoint.connect(event_loop)
+
+    cancel_token = CancelToken('test', event_loop)
+
+    async def cancel_soon() -> None:
+        await asyncio.sleep(0.1)
+        cancel_token.trigger()
+
+    asyncio.ensure_future(cancel_soon(), loop=event_loop)
+    item = DummyRequestPair()
+    with pytest.raises(OperationCancelled):
+        await endpoint.request(item, cancel_token)
+
+    # Ensure the registration was cleaned up
+    assert item._id not in endpoint._futures
 
     endpoint.stop()
     bus.stop()
