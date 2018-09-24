@@ -13,6 +13,7 @@ import pytest
 from lahja import (
     BaseEvent,
     BaseRequestResponseEvent,
+    Endpoint,
     EventBus,
     UnexpectedResponse,
 )
@@ -38,12 +39,7 @@ class DummyRequestPair(BaseRequestResponseEvent[DummyResponse]):
 
 
 @pytest.mark.asyncio
-async def test_can_unsubscribe() -> None:
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect()
-
+async def test_can_unsubscribe(endpoint: Endpoint) -> None:
     cancel_token = endpoint.subscribe(
         DummyRequestPair,
         lambda ev: endpoint.broadcast(
@@ -63,19 +59,10 @@ async def test_can_unsubscribe() -> None:
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(endpoint.request(DummyRequestPair()), timeout=0.1)
 
-    endpoint.stop()
-    bus.stop()
-
 
 @pytest.mark.asyncio
-async def test_can_unsubscribe_with_passed_token() -> None:
-    event_loop = asyncio.get_event_loop()
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect(event_loop)
-
-    parent_cancel_token = CancelToken('parent', event_loop)
+async def test_can_unsubscribe_with_passed_token(endpoint: Endpoint) -> None:
+    parent_cancel_token = CancelToken('parent', endpoint.loop)
 
     endpoint.subscribe(
         DummyRequestPair,
@@ -97,17 +84,9 @@ async def test_can_unsubscribe_with_passed_token() -> None:
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(endpoint.request(DummyRequestPair()), timeout=0.1)
 
-    endpoint.stop()
-    bus.stop()
-
 
 @pytest.mark.asyncio
-async def test_request() -> None:
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect()
-
+async def test_request(endpoint: Endpoint) -> None:
     endpoint.subscribe(
         DummyRequestPair,
         lambda ev: endpoint.broadcast(
@@ -126,9 +105,6 @@ async def test_request() -> None:
 
     # Ensure the registration was cleaned up
     assert item._id not in endpoint._futures
-
-    endpoint.stop()
-    bus.stop()
 
 
 @pytest.mark.asyncio
@@ -158,7 +134,7 @@ async def test_request_with_cancellation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_response_must_match() -> None:
+async def test_response_must_match(endpoint: Endpoint) -> None:
     bus = EventBus()
     endpoint = bus.create_endpoint('test')
     bus.start()
@@ -180,11 +156,7 @@ async def test_response_must_match() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_with_break() -> None:
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect()
+async def test_stream_with_break(endpoint: Endpoint) -> None:
     stream_counter = 0
 
     async def stream_response() -> None:
@@ -207,17 +179,12 @@ async def test_stream_with_break() -> None:
     await asyncio.sleep(0.1)
     # Ensure the registration was cleaned up
     assert len(endpoint._queues[DummyRequest]) == 0
-    endpoint.stop()
-    bus.stop()
     assert stream_counter == 2
 
 
 @pytest.mark.asyncio
-async def test_stream_with_max() -> None:
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect()
+async def test_stream_with_max(endpoint: Endpoint) -> None:
+
     stream_counter = 0
 
     async def stream_response() -> None:
@@ -237,21 +204,14 @@ async def test_stream_with_max() -> None:
     await asyncio.sleep(0.1)
     # Ensure the registration was cleaned up
     assert len(endpoint._queues[DummyRequest]) == 0
-    endpoint.stop()
-    bus.stop()
     assert stream_counter == 2
 
 
 @pytest.mark.asyncio
-async def test_stream_with_cancellation() -> None:
-    event_loop = asyncio.get_event_loop()
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect(event_loop)
+async def test_stream_with_cancellation(endpoint: Endpoint) -> None:
     stream_counter = 0
 
-    cancel_token = CancelToken('test', event_loop)
+    cancel_token = CancelToken('test', endpoint.loop)
 
     async def stream_response() -> None:
         async for event in endpoint.stream(DummyRequest, cancel_token=cancel_token):
@@ -272,21 +232,15 @@ async def test_stream_with_cancellation() -> None:
             if i == 2:
                 cancel_token.trigger()
 
-    asyncio.ensure_future(stream_response(), loop=event_loop)
+    asyncio.ensure_future(stream_response(), loop=endpoint.loop)
     await request()
     # Ensure the registration was cleaned up
     assert len(endpoint._queues[DummyRequest]) == 0
-    endpoint.stop()
-    bus.stop()
     assert stream_counter == 3
 
 
 @pytest.mark.asyncio
-async def test_wait_for() -> None:
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect()
+async def test_wait_for(endpoint: Endpoint) -> None:
     received = None
 
     async def stream_response() -> None:
@@ -301,32 +255,21 @@ async def test_wait_for() -> None:
     endpoint.broadcast(DummyRequest())
 
     await asyncio.sleep(0.01)
-    endpoint.stop()
-    bus.stop()
     assert isinstance(received, DummyRequest)
 
 
 @pytest.mark.asyncio
-async def test_wait_for_with_cancellation() -> None:
-    event_loop = asyncio.get_event_loop()
-    bus = EventBus()
-    endpoint = bus.create_endpoint('test')
-    bus.start()
-    endpoint.connect(event_loop)
-
-    cancel_token = CancelToken('test', event_loop)
+async def test_wait_for_with_cancellation(endpoint: Endpoint) -> None:
+    cancel_token = CancelToken('test', endpoint.loop)
 
     async def cancel_soon() -> None:
         await asyncio.sleep(0.1)
         cancel_token.trigger()
 
-    asyncio.ensure_future(cancel_soon(), loop=event_loop)
+    asyncio.ensure_future(cancel_soon(), loop=endpoint.loop)
 
     with pytest.raises(OperationCancelled):
         await endpoint.wait_for(DummyRequest, cancel_token)
 
     # Ensure the registration was cleaned up
     assert len(endpoint._queues[DummyRequest]) == 0
-
-    endpoint.stop()
-    bus.stop()
