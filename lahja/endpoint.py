@@ -195,18 +195,6 @@ class Endpoint:
 
         return token
 
-    async def _run_when_triggered(self, token: CancelToken, handler: Callable[..., Any]) -> None:
-        await token.wait()
-        handler()
-
-    def _chain_or_create_cancel_token(self,
-                                      token_name: str,
-                                      token: Optional[CancelToken] = None) -> CancelToken:
-
-        return (CancelToken(token_name, self.loop).chain(token)
-                if token is not None else
-                CancelToken(token_name, self.loop))
-
     TStreamEvent = TypeVar('TStreamEvent', bound=BaseEvent)
 
     async def stream(self,
@@ -266,3 +254,15 @@ class Endpoint:
     def _raise_if_loop_missing(self) -> None:
         if self._loop is None:
             raise NoConnection("Need to call `connect()` first")
+
+    async def _run_when_triggered(self, token: CancelToken, handler: Callable[..., Any]) -> None:
+        await token.wait()
+        handler()
+
+    def _chain_or_create_cancel_token(self,
+                                      token_name: str,
+                                      token: Optional[CancelToken] = None) -> CancelToken:
+
+        return (CancelToken(token_name, self.loop).chain(token)
+                if token is not None else
+                CancelToken(token_name, self.loop))
