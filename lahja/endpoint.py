@@ -248,13 +248,20 @@ class Endpoint:
 
     TWaitForEvent = TypeVar('TWaitForEvent', bound=BaseEvent)
 
-    async def wait_for(self, event_type: Type[TWaitForEvent]) -> TWaitForEvent:  # type: ignore
+    async def wait_for(self,
+                       event_type: Type[TWaitForEvent],
+                       cancel_token: Optional[CancelToken] = None) -> TWaitForEvent:
         """
         Wait for a single instance of an event that matches the specified event type.
         """
-        # mypy thinks we are missing a return statement but this seems fair to do
-        async for event in self.stream(event_type, max=1):
+
+        token = self._chain_or_create_cancel_token(f'wait_for#{event_type}', cancel_token)
+
+        async for event in self.stream(event_type, max=1, cancel_token=token):
             return event
+
+        # We can only get here if the token was triggered
+        raise OperationCancelled("Operation was cancelled")
 
     def _raise_if_loop_missing(self) -> None:
         if self._loop is None:

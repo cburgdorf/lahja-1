@@ -304,3 +304,29 @@ async def test_wait_for() -> None:
     endpoint.stop()
     bus.stop()
     assert isinstance(received, DummyRequest)
+
+
+@pytest.mark.asyncio
+async def test_wait_for_with_cancellation() -> None:
+    event_loop = asyncio.get_event_loop()
+    bus = EventBus()
+    endpoint = bus.create_endpoint('test')
+    bus.start()
+    endpoint.connect(event_loop)
+
+    cancel_token = CancelToken('test', event_loop)
+
+    async def cancel_soon() -> None:
+        await asyncio.sleep(0.1)
+        cancel_token.trigger()
+
+    asyncio.ensure_future(cancel_soon(), loop=event_loop)
+
+    with pytest.raises(OperationCancelled):
+        await endpoint.wait_for(DummyRequest, cancel_token)
+
+    # Ensure the registration was cleaned up
+    assert len(endpoint._queues[DummyRequest]) == 0
+
+    endpoint.stop()
+    bus.stop()
