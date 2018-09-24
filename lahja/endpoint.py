@@ -233,7 +233,7 @@ class Endpoint:
             try:
                 yield event
             except GeneratorExit:
-                self._queues[event_type].remove(queue)
+                token.trigger()
             else:
                 if i is not None and i >= cast(int, max):
                     token.trigger()

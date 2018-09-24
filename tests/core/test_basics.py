@@ -121,6 +121,7 @@ async def test_request() -> None:
     # mypy has the type information we think it has. We run mypy on the tests.
     print(response.property_of_dummy_response)
     assert isinstance(response, DummyResponse)
+
     endpoint.stop()
     bus.stop()
 
@@ -148,6 +149,39 @@ async def test_response_must_match() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stream_with_break() -> None:
+    bus = EventBus()
+    endpoint = bus.create_endpoint('test')
+    bus.start()
+    endpoint.connect()
+    stream_counter = 0
+
+    async def stream_response() -> None:
+        async for event in endpoint.stream(DummyRequest):
+            # Accessing `ev.property_of_dummy_request` here allows us to validate
+            # mypy has the type information we think it has. We run mypy on the tests.
+            print(event.property_of_dummy_request)
+            nonlocal stream_counter
+            stream_counter += 1
+
+            if stream_counter == 2:
+                break
+
+    asyncio.ensure_future(stream_response())
+
+    # we broadcast one more item than what we consume and test for that
+    for i in range(5):
+        endpoint.broadcast(DummyRequest())
+
+    await asyncio.sleep(0.1)
+    # Ensure the registration was cleaned up
+    assert len(endpoint._queues[DummyRequest]) == 0
+    endpoint.stop()
+    bus.stop()
+    assert stream_counter == 2
+
+
+@pytest.mark.asyncio
 async def test_stream_with_max() -> None:
     bus = EventBus()
     endpoint = bus.create_endpoint('test')
@@ -170,6 +204,7 @@ async def test_stream_with_max() -> None:
         endpoint.broadcast(DummyRequest())
 
     await asyncio.sleep(0.1)
+    # Ensure the registration was cleaned up
     assert len(endpoint._queues[DummyRequest]) == 0
     endpoint.stop()
     bus.stop()
