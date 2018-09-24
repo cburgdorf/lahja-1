@@ -142,7 +142,8 @@ class Endpoint:
                       cancel_token: Optional[CancelToken] = None) -> TResponse:
         """
         Broadcast an instance of :class:`~lahja.misc.BaseEvent` on the event bus and immediately
-        wait on an expected answer of type :class:`~lahja.misc.BaseEvent`.
+        wait on an expected answer of type :class:`~lahja.misc.BaseEvent`. Optionally pass an
+        :class:`~cancel_token.CancelToken` to cancel the request.
         """
         item._origin = self.name
         item._id = str(uuid.uuid4())
@@ -176,8 +177,9 @@ class Endpoint:
                   cancel_token: Optional[CancelToken] = None) -> CancelToken:
         """
         Subscribe to receive updates for any event that matches the specified event type.
-        A handler is passed as a second argument an :class:`~lahja.misc.Subscription` is returned
-        to unsubscribe from the event if needed.
+        A handler is passed as a second argument. A :class:`~cancel_token.CancelToken` is
+        returned to unsubscribe. Optionally a :class:`~cancel_token.CancelToken` can also
+        be passed unsubscribe whenever the token is triggered.
         """
         if event_type not in self._handler:
             self._handler[event_type] = []
@@ -206,6 +208,8 @@ class Endpoint:
         ``AsyncIterable[BaseEvent]`` which can be consumed through an ``async for`` loop.
         An optional ``max`` parameter can be passed to stop streaming after a maximum amount
         of events was received.
+        Optionally a :class:`~cancel_token.CancelToken` can be passed to unsubscribe from the
+        stream. Additionally it is possible to break out of the loop at any time.
         """
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -241,6 +245,8 @@ class Endpoint:
                        cancel_token: Optional[CancelToken] = None) -> TWaitForEvent:
         """
         Wait for a single instance of an event that matches the specified event type.
+        Optionally a :class:`~cancel_token.CancelToken` can be passed to unsubscribe from the
+        event.
         """
 
         token = self._chain_or_create_cancel_token(f'wait_for#{event_type}', cancel_token)

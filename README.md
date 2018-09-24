@@ -124,22 +124,22 @@ Events can be received in three different fashions. All APIs are non-blocking.
 
 **Subscribe API**
 
-`def subscribe(self, event_type: Type[BaseEvent], handler: Callable[[BaseEvent], None]) -> Subscription:`
+`def subscribe(self, event_type: Type[BaseEvent], handler: Callable[[BaseEvent], None]) -> CancelToken:`
 
 *Example:*
 
 ```Python
-subscription = endpoint.subscribe(SecondThingHappened, lambda event: 
+cancel_token = endpoint.subscribe(SecondThingHappened, lambda event: 
     print("Received via SUBSCRIBE API in proc1: ", event.payload)
 )
 ```
 
-The handler will be called every time that a `SecondThingHappened` event is fired. Notice that the returned `Subscription` allows deregistering from the event at any later point in time.
+The handler will be called every time that a `SecondThingHappened` event is fired. Notice that the returned `CancelToken` allows deregistering from the event at any later point in time.
 
 *Example:*
 
 ```Python
-subscription.unsubscribe()
+cancel_token.trigger()
 ```
 
 **Stream API**
