@@ -68,12 +68,13 @@ async def test_can_unsubscribe() -> None:
 
 @pytest.mark.asyncio
 async def test_can_unsubscribe_with_passed_token() -> None:
+    event_loop = asyncio.get_event_loop()
     bus = EventBus()
     endpoint = bus.create_endpoint('test')
     bus.start()
-    endpoint.connect()
+    endpoint.connect(event_loop)
 
-    parent_cancel_token = CancelToken('parent')
+    parent_cancel_token = CancelToken('parent', event_loop)
 
     endpoint.subscribe(
         DummyRequestPair,
@@ -168,10 +169,50 @@ async def test_stream_with_max() -> None:
     for i in range(3):
         endpoint.broadcast(DummyRequest())
 
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.1)
+    assert len(endpoint._queues[DummyRequest]) == 0
     endpoint.stop()
     bus.stop()
     assert stream_counter == 2
+
+
+@pytest.mark.asyncio
+async def test_stream_with_cancellation() -> None:
+    event_loop = asyncio.get_event_loop()
+    bus = EventBus()
+    endpoint = bus.create_endpoint('test')
+    bus.start()
+    endpoint.connect(event_loop)
+    stream_counter = 0
+
+    cancel_token = CancelToken('test', event_loop)
+
+    async def stream_response() -> None:
+        async for event in endpoint.stream(DummyRequest, cancel_token=cancel_token):
+            # Accessing `ev.property_of_dummy_request` here allows us to validate
+            # mypy has the type information we think it has. We run mypy on the tests.
+            print(event.property_of_dummy_request)
+            nonlocal stream_counter
+            stream_counter += 1
+
+    async def request() -> None:
+        # we broadcast one more item than what we consume and test for that
+        for i in range(10):
+            endpoint.broadcast(DummyRequest())
+            # We need to yield back to the event loop. Otherwise responses will not
+            # even have a chance to kick in
+            await asyncio.sleep(0.01)
+
+            if i == 2:
+                cancel_token.trigger()
+
+    asyncio.ensure_future(stream_response(), loop=event_loop)
+    await request()
+    # Ensure the registration was cleaned up
+    assert len(endpoint._queues[DummyRequest]) == 0
+    endpoint.stop()
+    bus.stop()
+    assert stream_counter == 3
 
 
 @pytest.mark.asyncio

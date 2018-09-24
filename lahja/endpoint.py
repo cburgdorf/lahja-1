@@ -18,6 +18,7 @@ import uuid
 
 from cancel_token import (
     CancelToken,
+    OperationCancelled,
 )
 
 from .async_util import (
@@ -194,14 +195,15 @@ class Endpoint:
                                       token_name: str,
                                       token: Optional[CancelToken] = None) -> CancelToken:
 
-        return (CancelToken(token_name).chain(token)
+        return (CancelToken(token_name, self.loop).chain(token)
                 if token is not None else
-                CancelToken(token_name))
+                CancelToken(token_name, self.loop))
 
     TStreamEvent = TypeVar('TStreamEvent', bound=BaseEvent)
 
     async def stream(self,
                      event_type: Type[TStreamEvent],
+                     cancel_token: Optional[CancelToken] = None,
                      max: Optional[int] = None) -> AsyncIterable[TStreamEvent]:
         """
         Stream all events that match the specified event type. This returns an
@@ -216,9 +218,16 @@ class Endpoint:
 
         self._queues[event_type].append(queue)
 
+        token = self._chain_or_create_cancel_token(f'stream#{event_type}', cancel_token)
+
         i = None if max is None else 0
         while True:
-            event = await queue.get()
+            try:
+                event = await token.cancellable_wait(queue.get())
+            except OperationCancelled:
+                self._queues[event_type].remove(queue)
+                break
+
             if i is not None:
                 i += 1
             try:
@@ -227,7 +236,7 @@ class Endpoint:
                 self._queues[event_type].remove(queue)
             else:
                 if i is not None and i >= cast(int, max):
-                    break
+                    token.trigger()
 
     TWaitForEvent = TypeVar('TWaitForEvent', bound=BaseEvent)
 
