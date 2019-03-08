@@ -18,6 +18,14 @@ ConnectionConfig
     :undoc-members:
     :show-inheritance:
 
+ListenerConfig
+--------------
+
+.. autoclass:: lahja.endpoint.ListenerConfig
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Exceptions
 ----------
 

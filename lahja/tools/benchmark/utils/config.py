@@ -3,13 +3,13 @@ from typing import (
 )
 
 from lahja import (
-    ConnectionConfig,
+    ListenerConfig,
 )
 
 
-def create_consumer_endpoint_configs(num_processes: int) -> Tuple[ConnectionConfig, ...]:
+def create_consumer_endpoint_configs(num_processes: int) -> Tuple[ListenerConfig, ...]:
     return tuple(
-        ConnectionConfig.from_name(create_consumer_endpoint_name(i)) for i in range(num_processes)
+        ListenerConfig.from_name(create_consumer_endpoint_name(i)) for i in range(num_processes)
     )
 
 

@@ -15,6 +15,12 @@ from lahja import (
 )
 
 
+class DummyEvent(BaseEvent):
+
+    def __init__(self, payload: int) -> None:
+        self.payload = payload
+
+
 class DummyRequest(BaseEvent):
     property_of_dummy_request = None
 

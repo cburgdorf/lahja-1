@@ -6,6 +6,7 @@ from lahja import (
     BaseEvent,
     Endpoint,
     ConnectionConfig,
+    ListenerConfig,
 )
 
 
@@ -28,7 +29,7 @@ def run_proc1():
     endpoint = Endpoint()
     endpoint.start_serving_nowait(ConnectionConfig.from_name('e1'))
     endpoint.connect_to_endpoints_blocking(
-        ConnectionConfig.from_name('e2')
+        ListenerConfig.from_name('e2')
     )
     endpoint.subscribe(SecondThingHappened, lambda event: 
         print("Received via SUBSCRIBE API in proc1: ", event.payload)
@@ -54,7 +55,7 @@ def run_proc2():
     endpoint = Endpoint()
     endpoint.start_serving_nowait(ConnectionConfig.from_name('e2'))
     endpoint.connect_to_endpoints_blocking(
-        ConnectionConfig.from_name('e1')
+        ListenerConfig.from_name('e1')
     )
     endpoint.subscribe(FirstThingHappened, lambda event: 
         print("Received via SUBSCRIBE API in proc2:", event.payload)

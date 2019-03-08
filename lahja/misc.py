@@ -24,28 +24,37 @@ class Subscription:
 class BroadcastConfig:
 
     def __init__(self,
-                 filter_endpoint: Optional[str] = None,
-                 filter_event_id: Optional[str] = None,
+                 filter_endpoint: str = '',
+                 filter_event_id: str = '',
                  internal: bool = False) -> None:
 
         self.filter_endpoint = filter_endpoint
         self.filter_event_id = filter_event_id
         self.internal = internal
 
-        if self.internal and self.filter_endpoint is not None:
+        if self.internal and len(self.filter_endpoint) > 0:
             raise ValueError("`internal` can not be used with `filter_endpoint")
 
-    def allowed_to_receive(self, endpoint: str) -> bool:
-        return self.filter_endpoint is None or self.filter_endpoint == endpoint
+    def is_not_exclusive(self) -> bool:
+        return len(self.filter_endpoint) == 0
 
 
 class BaseEvent:
 
     _origin = ''
-    _id: Optional[str] = None
+    _id: str = ''
     _config: Optional[BroadcastConfig] = None
 
     def broadcast_config(self, internal: bool = False) -> BroadcastConfig:
+        """
+        Retrieve a :class:`~lahja.misc.BroadcastConfig` based on the origin of the event. A
+        :class:`~lahja.misc.BroadcastConfig` generated through this API ensures that an event
+        will only be send to the :class:`~lahja.endpoint.Endpoint` where the origin event came
+        from. Furthermore, if the event was send using the :meth:`~lahja.endpoint.Endpoint.request`
+        API retrieving a :class:`~lahja.misc.BroadcastConfig` through this API will guarantee to
+        only propagate the event as a direct response to the callsite that initiated the origin
+        event.
+        """
         if internal:
             return BroadcastConfig(
                 internal=True,

@@ -13,6 +13,7 @@ from lahja import (
     BroadcastConfig,
     ConnectionConfig,
     Endpoint,
+    ListenerConfig,
 )
 from lahja.tools.benchmark.constants import (
     DRIVER_ENDPOINT,
@@ -36,7 +37,7 @@ from lahja.tools.benchmark.utils.reporting import (
 
 class DriverProcessConfig(NamedTuple):
     num_events: int
-    connected_endpoints: Tuple[ConnectionConfig, ...]
+    connected_endpoints: Tuple[ListenerConfig, ...]
     throttle: float
     payload_bytes: int
 
@@ -115,7 +116,7 @@ class ConsumerProcess:
         event_bus = Endpoint()
         event_bus.start_serving_nowait(ConnectionConfig.from_name(name))
         event_bus.connect_to_endpoints_blocking(
-            ConnectionConfig.from_name(REPORTER_ENDPOINT)
+            ListenerConfig.from_name(REPORTER_ENDPOINT)
         )
         # UNCOMMENT FOR DEBUGGING
         # logger = multiprocessing.log_to_stderr()
@@ -168,6 +169,6 @@ class ReportingProcess:
         loop = asyncio.get_event_loop()
         event_bus = Endpoint()
         event_bus.start_serving_nowait(ConnectionConfig.from_name(REPORTER_ENDPOINT))
-        event_bus.connect_to_endpoints_blocking(ConnectionConfig.from_name(ROOT_ENDPOINT))
+        event_bus.connect_to_endpoints_blocking(ListenerConfig.from_name(ROOT_ENDPOINT))
 
         loop.run_until_complete(ReportingProcess.worker(event_bus, logger, config))

@@ -11,6 +11,7 @@ from helpers import (
 from lahja import (
     ConnectionConfig,
     Endpoint,
+    ListenerConfig,
 )
 
 
@@ -26,8 +27,8 @@ async def test_can_stop(
     second_endpoint = Endpoint()
     await second_endpoint.start_serving(second, event_loop)
 
-    await first_endpoint.connect_to_endpoints(second)
-    await second_endpoint.connect_to_endpoints(first)
+    await first_endpoint.connect_to_endpoints(ListenerConfig.from_connection_config(second))
+    await second_endpoint.connect_to_endpoints(ListenerConfig.from_connection_config(first))
 
     first_endpoint.stop()
 

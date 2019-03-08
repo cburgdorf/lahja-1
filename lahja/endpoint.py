@@ -59,6 +59,61 @@ class ConnectionConfig(NamedTuple):
             raise TypeError("Provided `base_path` must be a directory")
 
 
+def filter_none(event: BaseEvent) -> bool:
+    return True
+
+
+class ListenerConfig(NamedTuple):
+    """
+    Configuration class needed to add an :class:`~lahja.endpoint.Endpoint` as a listener of another
+    :class:`~lahja.endpoint.Endpoint` so that it can receive its events.
+
+    The ``name`` and ``path`` (IPC) of the listener :class:`~lahja.endpoint.Endpoint` are required
+    but the convenience APIs :meth:`~lahja.endpoint.ListenerConfig.from_name` and
+    :meth:`~lahja.endpoint.ListenerConfig.from_connection_config` make it easy to derive a path
+    from the ``name`` if no custom ``path`` handling is required.
+
+    Additionally, listeners can provide a ``filter_predicate`` to shield the listener from events
+    that it is not interested in. The ``filter_predicate`` receives the event in question and
+    should return ``True`` if the listener wants to receive the event or ``False`` if it doesn't.
+
+    Example:
+
+    .. code:: python
+
+        producer.add_listener_endpoints(
+            ListenerConfig.from_name(
+                'receiver',
+                filter_predicate=lambda ev: not isinstance(ev, BadEvent),
+            )
+        )
+
+    This is an effective measure to shield an :class:`~lahja.endpoint.Endpoint` from
+    events that aren't needed by any callsite.
+    """
+    name: str
+    path: pathlib.Path
+    filter_predicate: Callable[[BaseEvent], bool]
+
+    @classmethod
+    def from_name(
+            cls,
+            name: str,
+            base_path: Optional[pathlib.Path]=None,
+            filter_predicate: Callable[[BaseEvent], bool] = filter_none) -> 'ListenerConfig':
+
+        connection_config = ConnectionConfig.from_name(name, base_path)
+        return cls.from_connection_config(connection_config, filter_predicate)
+
+    @classmethod
+    def from_connection_config(
+            cls,
+            connection_config: ConnectionConfig,
+            filter_predicate: Callable[[BaseEvent], bool] = filter_none) -> 'ListenerConfig':
+
+        return cls(connection_config.name, connection_config.path, filter_predicate)
+
+
 class EndpointConnector:
     """
     Expose the receiving queue of an :class:`~lahja.endpoint.Endpoint` so that any other
@@ -91,6 +146,11 @@ class ProxyEndpointConnector(BaseProxy):  # type: ignore # TypeShed is missing B
         self._callmethod('put_nowait', (item_and_config,))
 
 
+class ListeningEndpoint(NamedTuple):
+    config: ListenerConfig
+    connector: ProxyEndpointConnector
+
+
 class Endpoint:
     """
     The :class:`~lahja.endpoint.Endpoint` enables communication between different processes
@@ -110,7 +170,7 @@ class Endpoint:
     _loop: asyncio.AbstractEventLoop
 
     def __init__(self) -> None:
-        self._connected_endpoints: Dict[str, BaseProxy] = {}
+        self._listening_endpoints: Dict[str, ListeningEndpoint] = {}
         self._futures: Dict[Optional[str], asyncio.Future] = {}
         self._handler: Dict[Type[BaseEvent], List[Callable[[BaseEvent], Any]]] = {}
         self._queues: Dict[Type[BaseEvent], List[asyncio.Queue]] = {}
@@ -190,7 +250,7 @@ class Endpoint:
             loop=self.event_loop
         )
 
-    def _throw_if_already_connected(self, *endpoints: ConnectionConfig) -> None:
+    def _throw_if_already_connected(self, *endpoints: ListenerConfig) -> None:
         seen: Set[str] = set()
 
         for config in endpoints:
@@ -198,7 +258,7 @@ class Endpoint:
                 raise ConnectionAttemptRejected(
                     f"Trying to connect to {config.name} twice. Names must be uniqe."
                 )
-            elif config.name in self._connected_endpoints.keys():
+            elif config.name in self._listening_endpoints.keys():
                 raise ConnectionAttemptRejected(
                     f"Already connected to {config.name} at {config.path}. Names must be unique."
                 )
@@ -231,7 +291,7 @@ class Endpoint:
         server = manager.get_server()   # type: ignore
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
-    def connect_to_endpoints_blocking(self, *endpoints: ConnectionConfig, timeout: int=30) -> None:
+    def connect_to_endpoints_blocking(self, *endpoints: ListenerConfig, timeout: int=30) -> None:
         """
         Connect to the given endpoints and block until the connection to every endpoint is
         established. Raises a ``TimeoutError`` if connections do not become available within
@@ -242,7 +302,7 @@ class Endpoint:
             wait_for_path_blocking(endpoint.path, timeout)
             self._connect_if_not_already_connected(endpoint)
 
-    async def connect_to_endpoints(self, *endpoints: ConnectionConfig) -> None:
+    async def connect_to_endpoints(self, *endpoints: ListenerConfig) -> None:
         """
         Connect to the given endpoints and await until all connections are established.
         """
@@ -252,7 +312,7 @@ class Endpoint:
             loop=self.event_loop
         )
 
-    def connect_to_endpoints_nowait(self, *endpoints: ConnectionConfig) -> None:
+    def connect_to_endpoints_nowait(self, *endpoints: ListenerConfig) -> None:
         """
         Connect to the given endpoints as soon as they become available but do not block.
         """
@@ -260,13 +320,13 @@ class Endpoint:
         for endpoint in endpoints:
             asyncio.ensure_future(self._await_connect_to_endpoint(endpoint))
 
-    async def _await_connect_to_endpoint(self, endpoint: ConnectionConfig) -> None:
+    async def _await_connect_to_endpoint(self, endpoint: ListenerConfig) -> None:
         await wait_for_path(endpoint.path)
         self._connect_if_not_already_connected(endpoint)
 
-    def _connect_if_not_already_connected(self, endpoint: ConnectionConfig) -> None:
+    def _connect_if_not_already_connected(self, endpoint: ListenerConfig) -> None:
 
-        if endpoint.name in self._connected_endpoints.keys():
+        if endpoint.name in self._listening_endpoints.keys():
             self.logger.warning(
                 "Tried to connect to %s but we are already connected to that Endpoint",
                 endpoint.name
@@ -283,10 +343,13 @@ class Endpoint:
 
         manager = ConnectorManager(address=str(endpoint.path))  # type: ignore
         manager.connect()
-        self._connected_endpoints[endpoint.name] = manager.get_connector()  # type: ignore
+        self._listening_endpoints[endpoint.name] = ListeningEndpoint(
+            config=endpoint,
+            connector=manager.get_connector(),  # type: ignore
+        )
 
     def is_connected_to(self, endpoint_name: str) -> bool:
-        return endpoint_name in self._connected_endpoints
+        return endpoint_name in self._listening_endpoints
 
     def _process_item(self, item: BaseEvent, config: BroadcastConfig) -> None:
         if item is TRANSPARENT_EVENT:
@@ -327,7 +390,7 @@ class Endpoint:
         self._receiving_queue.put_nowait((TRANSPARENT_EVENT, None))
         self._internal_queue.put_nowait((TRANSPARENT_EVENT, None))
 
-    def broadcast(self, item: BaseEvent, config: Optional[BroadcastConfig] = None) -> None:
+    def broadcast(self, item: BaseEvent, config: BroadcastConfig = BroadcastConfig()) -> None:
         """
         Broadcast an instance of :class:`~lahja.misc.BaseEvent` on the event bus. Takes
         an optional second parameter of :class:`~lahja.misc.BroadcastConfig` to decide
@@ -335,22 +398,30 @@ class Endpoint:
         all connected endpoints with their consuming call sites.
         """
         item._origin = self.name
-        if config is not None and config.internal:
+        if config.internal:
             # Internal events simply bypass going through the central event bus
             # and are directly put into the local receiving queue instead.
             self._internal_queue.put_nowait((item, config))
         else:
             # Broadcast to every connected Endpoint that is allowed to receive the event
-            for name, connector in self._connected_endpoints.items():
-                allowed = (config is None) or config.allowed_to_receive(name)
-                if allowed:
-                    connector.put_nowait((item, config))
+            for name, listening_endpoint in self._listening_endpoints.items():
+
+                # Event is not directed at specific endpoint, check the `filter_predicate`
+                # in case the listener does not want to receive this kind of broadcast
+                if config.is_not_exclusive() and listening_endpoint.config.filter_predicate(item):
+                    listening_endpoint.connector.put_nowait((item, config))
+                # It is directed at a specific endpoint, no further filters apply in this case
+                elif config.filter_endpoint == name:
+                    listening_endpoint.connector.put_nowait((item, config))
+                # This event should not get broadcasted to this listener, skip
+                else:
+                    continue
 
     TResponse = TypeVar('TResponse', bound=BaseEvent)
 
     async def request(self,
                       item: BaseRequestResponseEvent[TResponse],
-                      config: Optional[BroadcastConfig] = None) -> TResponse:
+                      config: BroadcastConfig = BroadcastConfig()) -> TResponse:
         """
         Broadcast an instance of :class:`~lahja.misc.BaseRequestResponseEvent` on the event bus and
         immediately wait on an expected answer of type :class:`~lahja.misc.BaseEvent`. Optionally
