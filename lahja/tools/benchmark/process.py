@@ -60,7 +60,7 @@ class DriverProcess:
         loop = asyncio.get_event_loop()
         event_bus = Endpoint()
         event_bus.start_serving_nowait(ConnectionConfig.from_name(DRIVER_ENDPOINT))
-        event_bus.connect_to_endpoints_blocking(*config.connected_endpoints)
+        event_bus.add_listener_endpoints_blocking(*config.connected_endpoints)
         # UNCOMMENT FOR DEBUGGING
         # logger = multiprocessing.log_to_stderr()
         # logger.setLevel(logging.INFO)
@@ -115,7 +115,7 @@ class ConsumerProcess:
         loop = asyncio.get_event_loop()
         event_bus = Endpoint()
         event_bus.start_serving_nowait(ConnectionConfig.from_name(name))
-        event_bus.connect_to_endpoints_blocking(
+        event_bus.add_listener_endpoints_blocking(
             ListenerConfig.from_name(REPORTER_ENDPOINT)
         )
         # UNCOMMENT FOR DEBUGGING
@@ -169,6 +169,6 @@ class ReportingProcess:
         loop = asyncio.get_event_loop()
         event_bus = Endpoint()
         event_bus.start_serving_nowait(ConnectionConfig.from_name(REPORTER_ENDPOINT))
-        event_bus.connect_to_endpoints_blocking(ListenerConfig.from_name(ROOT_ENDPOINT))
+        event_bus.add_listener_endpoints_blocking(ListenerConfig.from_name(ROOT_ENDPOINT))
 
         loop.run_until_complete(ReportingProcess.worker(event_bus, logger, config))

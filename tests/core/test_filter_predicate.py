@@ -39,7 +39,7 @@ async def endpoints_with_filter_predicate(
     def is_odd(ev: BaseEvent) -> bool:
         return not is_even(ev)
 
-    await endpoint3.connect_to_endpoints(
+    await endpoint3.add_listener_endpoints(
         ListenerConfig.from_name(endpoint1.name, filter_predicate=is_even),
         ListenerConfig.from_name(endpoint2.name, filter_predicate=is_odd),
     )

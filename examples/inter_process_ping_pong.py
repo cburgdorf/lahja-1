@@ -28,7 +28,7 @@ def run_proc1():
     loop = asyncio.get_event_loop()
     endpoint = Endpoint()
     endpoint.start_serving_nowait(ConnectionConfig.from_name('e1'))
-    endpoint.connect_to_endpoints_blocking(
+    endpoint.add_listener_endpoints_blocking(
         ListenerConfig.from_name('e2')
     )
     endpoint.subscribe(SecondThingHappened, lambda event: 
@@ -54,7 +54,7 @@ def run_proc2():
     loop = asyncio.get_event_loop()
     endpoint = Endpoint()
     endpoint.start_serving_nowait(ConnectionConfig.from_name('e2'))
-    endpoint.connect_to_endpoints_blocking(
+    endpoint.add_listener_endpoints_blocking(
         ListenerConfig.from_name('e1')
     )
     endpoint.subscribe(FirstThingHappened, lambda event: 

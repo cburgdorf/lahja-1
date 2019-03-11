@@ -23,11 +23,11 @@ async def test_can_not_connect_conflicting_names_blocking(
 
     # We connect to our own Endpoint because for this test, it doesn't matter
     # if we use a foreign one or our own
-    endpoint.connect_to_endpoints_blocking(ListenerConfig.from_connection_config(own))
+    endpoint.add_listener_endpoints_blocking(ListenerConfig.from_connection_config(own))
 
     # Can't connect a second time
     with pytest.raises(ConnectionAttemptRejected):
-        endpoint.connect_to_endpoints_blocking(ListenerConfig.from_connection_config(own))
+        endpoint.add_listener_endpoints_blocking(ListenerConfig.from_connection_config(own))
 
 
 @pytest.mark.asyncio
@@ -40,11 +40,11 @@ async def test_can_not_connect_conflicting_names(
 
     # We connect to our own Endpoint because for this test, it doesn't matter
     # if we use a foreign one or our own
-    await endpoint.connect_to_endpoints(ListenerConfig.from_connection_config(own))
+    await endpoint.add_listener_endpoints(ListenerConfig.from_connection_config(own))
 
     # Can't connect a second time
     with pytest.raises(ConnectionAttemptRejected):
-        await endpoint.connect_to_endpoints(ListenerConfig.from_connection_config(own))
+        await endpoint.add_listener_endpoints(ListenerConfig.from_connection_config(own))
 
 
 @pytest.mark.asyncio
@@ -56,7 +56,7 @@ async def test_rejects_duplicates_when_connecting_blocking(
     await endpoint.start_serving(own, event_loop)
 
     with pytest.raises(ConnectionAttemptRejected):
-        endpoint.connect_to_endpoints_blocking(
+        endpoint.add_listener_endpoints_blocking(
             ListenerConfig.from_connection_config(own),
             ListenerConfig.from_connection_config(own),
         )
@@ -71,7 +71,7 @@ async def test_rejects_duplicates_when_connecting(
     await endpoint.start_serving(own, event_loop)
 
     with pytest.raises(ConnectionAttemptRejected):
-        await endpoint.connect_to_endpoints(
+        await endpoint.add_listener_endpoints(
             ListenerConfig.from_connection_config(own),
             ListenerConfig.from_connection_config(own),
         )
@@ -86,7 +86,7 @@ async def test_rejects_duplicates_when_connecting_nowait(
     await endpoint.start_serving(own, event_loop)
 
     with pytest.raises(ConnectionAttemptRejected):
-        endpoint.connect_to_endpoints_nowait(
+        endpoint.add_listener_endpoints_nowait(
             ListenerConfig.from_connection_config(own),
             ListenerConfig.from_connection_config(own),
         )

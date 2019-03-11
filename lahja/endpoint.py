@@ -291,20 +291,21 @@ class Endpoint:
         server = manager.get_server()   # type: ignore
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
-    def connect_to_endpoints_blocking(self, *endpoints: ListenerConfig, timeout: int=30) -> None:
+    def add_listener_endpoints_blocking(self, *endpoints: ListenerConfig, timeout: int=30) -> None:
         """
-        Connect to the given endpoints and block until the connection to every endpoint is
-        established. Raises a ``TimeoutError`` if connections do not become available within
-        ``timeout`` seconds (default 30 seconds).
+        Add the ``endpoints`` as new listeners so that they can receive events from this endpoint.
+        Block until the connection to every endpoint is established. Raises a ``TimeoutError`` if
+        connections do not become available within ``timeout`` seconds (default 30 seconds).
         """
         self._throw_if_already_connected(*endpoints)
         for endpoint in endpoints:
             wait_for_path_blocking(endpoint.path, timeout)
             self._connect_if_not_already_connected(endpoint)
 
-    async def connect_to_endpoints(self, *endpoints: ListenerConfig) -> None:
+    async def add_listener_endpoints(self, *endpoints: ListenerConfig) -> None:
         """
-        Connect to the given endpoints and await until all connections are established.
+        Add the ``endpoints`` as new listeners so that they can receive events from this endpoint.
+        Await until all connections are established.
         """
         self._throw_if_already_connected(*endpoints)
         await asyncio.gather(
@@ -312,9 +313,10 @@ class Endpoint:
             loop=self.event_loop
         )
 
-    def connect_to_endpoints_nowait(self, *endpoints: ListenerConfig) -> None:
+    def add_listener_endpoints_nowait(self, *endpoints: ListenerConfig) -> None:
         """
-        Connect to the given endpoints as soon as they become available but do not block.
+        Add the ``endpoints`` as new listeners so that they can receive events from this endpoint.
+        This API returns immediately and establishs connections as soon as they become available.
         """
         self._throw_if_already_connected(*endpoints)
         for endpoint in endpoints:
