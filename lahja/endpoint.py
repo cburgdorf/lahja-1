@@ -6,6 +6,7 @@ from multiprocessing.managers import (  # type: ignore # Typeshed definition is 
     BaseProxy,
 )
 import pathlib
+import pickle
 import threading
 from typing import (  # noqa: F401
     Any,
@@ -20,6 +21,7 @@ from typing import (  # noqa: F401
     Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 import uuid
@@ -169,6 +171,8 @@ class Endpoint:
 
     _loop: asyncio.AbstractEventLoop
 
+    _has_snappy_support: Optional[bool] = None
+
     def __init__(self) -> None:
         self._listening_endpoints: Dict[str, ListeningEndpoint] = {}
         self._futures: Dict[Optional[str], asyncio.Future] = {}
@@ -198,6 +202,17 @@ class Endpoint:
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def has_snappy_support(self) -> bool:
+        if self._has_snappy_support is None:
+            try:
+                import snappy  # noqa: F401
+                self._has_snappy_support = True
+            except ModuleNotFoundError:
+                self._has_snappy_support = False
+
+        return self._has_snappy_support
 
     def start_serving_nowait(self,
                              connection_config: ConnectionConfig,
@@ -250,6 +265,20 @@ class Endpoint:
             loop=self.event_loop
         )
 
+    def _compress_event(self, event: BaseEvent) -> Union[BaseEvent, bytes]:
+        if self.has_snappy_support:
+            import snappy
+            return cast(bytes, snappy.compress(pickle.dumps(event)))
+        else:
+            return event
+
+    def _decompress_event(self, data: Union[BaseEvent, bytes]) -> BaseEvent:
+        if isinstance(data, BaseEvent):
+            return data
+        else:
+            import snappy
+            return cast(BaseEvent, pickle.loads(snappy.decompress(data)))
+
     def _throw_if_already_connected(self, *endpoints: ListenerConfig) -> None:
         seen: Set[str] = set()
 
@@ -269,13 +298,13 @@ class Endpoint:
         self._receiving_loop_running.set()
         while self._running:
             (item, config) = await self._receiving_queue.get()
-            self._process_item(item, config)
+            event = self._decompress_event(item)
+            self._process_item(event, config)
 
     async def _connect_internal_queue(self) -> None:
         self._internal_loop_running.set()
         while self._running:
             (item, config) = await self._internal_queue.get()
-
             self._process_item(item, config)
 
     def _create_external_api(self, ipc_path: pathlib.Path) -> None:
@@ -406,15 +435,16 @@ class Endpoint:
             self._internal_queue.put_nowait((item, config))
         else:
             # Broadcast to every connected Endpoint that is allowed to receive the event
+            compressed_item = self._compress_event(item)
             for name, listening_endpoint in self._listening_endpoints.items():
 
                 # Event is not directed at specific endpoint, check the `filter_predicate`
                 # in case the listener does not want to receive this kind of broadcast
                 if config.is_not_exclusive() and listening_endpoint.config.filter_predicate(item):
-                    listening_endpoint.connector.put_nowait((item, config))
+                    listening_endpoint.connector.put_nowait((compressed_item, config))
                 # It is directed at a specific endpoint, no further filters apply in this case
                 elif config.filter_endpoint == name:
-                    listening_endpoint.connector.put_nowait((item, config))
+                    listening_endpoint.connector.put_nowait((compressed_item, config))
                 # This event should not get broadcasted to this listener, skip
                 else:
                     continue
