@@ -129,9 +129,7 @@ class Connection:
                 # Use a lock to serialize drain() calls. Circumvents this bug:
                 # https://bugs.python.org/issue29930
                 await self.writer.drain()
-        except BrokenPipeError:
-            raise RemoteDisconnected()
-        except ConnectionResetError:
+        except (BrokenPipeError, ConnectionResetError):
             raise RemoteDisconnected()
 
     async def read_message(self) -> Message:
@@ -145,11 +143,7 @@ class Connection:
             obj = pickle.loads(message)
             assert isinstance(obj, Message)
             return obj
-        except asyncio.IncompleteReadError:
-            raise RemoteDisconnected()
-        except BrokenPipeError:
-            raise RemoteDisconnected()
-        except ConnectionResetError:
+        except (asyncio.IncompleteReadError, BrokenPipeError, ConnectionResetError):
             raise RemoteDisconnected()
 
 
@@ -410,11 +404,15 @@ class Endpoint:
 
     @property
     def subscribed_events(self) -> Set[Type[BaseEvent]]:
-        "Return the set of events this Endpoint is currently listening for"
+        """
+        Return the set of events this Endpoint is currently listening for
+        """
         return set(self._handler.keys()) | set(self._queues.keys())
 
     async def _notify_subscriptions_changed(self) -> None:
-        "Tell all inbound connections of our new subscriptions"
+        """
+        Tell all inbound connections of our new subscriptions
+        """
         # make a copy so that the set doesn't change while we iterate over it
         for inbound_connection in self._inbound_connections.copy():
             await inbound_connection.notify_subscriptions_updated(self.subscribed_events)
