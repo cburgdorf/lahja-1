@@ -245,8 +245,9 @@ class OutboundConnection:
         async with self._received_subscription:
             await self._received_subscription.wait()
 
-    async def wait_until_subscribed_to(self, event: Type[BaseEvent]) -> None:
-        while event not in self.subscribed_messages:
+    async def wait_until_subscribed_to(self, event_type: Type[BaseEvent]) -> None:
+        while not any(issubclass(event, event_type) for event in self.subscribed_messages):
+            self.logger.error(self.subscribed_messages)
             await self.wait_until_subscription_received()
 
 
@@ -386,6 +387,7 @@ class AsyncioEndpoint(BaseEndpoint):
         """
         Return the set of events this Endpoint is currently listening for
         """
+
         return set(self._handler.keys()) | set(self._queues.keys())
 
     async def _notify_subscriptions_changed(self) -> None:
@@ -743,3 +745,5 @@ class AsyncioEndpoint(BaseEndpoint):
         finally:
             self._queues[event_type].remove(casted_queue)
             await self._notify_subscriptions_changed()
+
+Endpoint = AsyncioEndpoint

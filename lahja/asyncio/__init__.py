@@ -1,1 +1,1 @@
-from .endpoint import AsyncioEndpoint  # noqa: F401
+from .endpoint import AsyncioEndpoint, Endpoint  # noqa: F401
