@@ -246,8 +246,11 @@ class OutboundConnection:
             await self._received_subscription.wait()
 
     async def wait_until_subscribed_to(self, event: Type[BaseEvent]) -> None:
-        while event not in self.subscribed_messages:
+        while not self.is_subscribed_to(event):
             await self.wait_until_subscription_received()
+
+    def is_subscribed_to(self, event_type: Type[BaseEvent]) -> bool:
+        return any(issubclass(event, event_type) for event in self.subscribed_messages)
 
 
 TFunc = TypeVar("TFunc", bound=Callable[..., Any])
@@ -408,7 +411,7 @@ class AsyncioEndpoint(BaseEndpoint):
             raise Exception("there are no outbound connections!")
 
         for outbound in self._outbound_connections.values():
-            if event in outbound.subscribed_messages:
+            if outbound.is_subscribed_to(event):
                 return
 
         coros = [
