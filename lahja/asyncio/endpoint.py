@@ -841,15 +841,13 @@ class AsyncioEndpoint(BaseEndpoint):
         # that's a performance problem, not a correctness problem.
         self._subscriptions_changed.set()
 
-    async def subscribe(
+    def subscribe_nowait(
         self,
         event_type: Type[TSubscribeEvent],
         handler: Callable[[TSubscribeEvent], Union[Any, Awaitable[Any]]],
     ) -> Subscription:
         """
-        Subscribe to receive updates for any event that matches the specified event type.
-        A handler is passed as a second argument an :class:`~lahja.common.Subscription` is returned
-        to unsubscribe from the event if needed.
+        A sync compatible version of :meth:`~lahja.asyncio.AsyncioEndpoint.subscribe`
         """
         if inspect.iscoroutine(handler):
             casted_handler = cast(SubscriptionAsyncHandler, handler)
@@ -867,6 +865,18 @@ class AsyncioEndpoint(BaseEndpoint):
         self._subscriptions_changed.set()
 
         return Subscription(unsubscribe_fn)
+
+    async def subscribe(
+        self,
+        event_type: Type[TSubscribeEvent],
+        handler: Callable[[TSubscribeEvent], Union[Any, Awaitable[Any]]],
+    ) -> Subscription:
+        """
+        Subscribe to receive updates for any event that matches the specified event type.
+        A handler is passed as a second argument an :class:`~lahja.common.Subscription` is returned
+        to unsubscribe from the event if needed.
+        """
+        return self.subscribe_nowait(event_type, handler)
 
     async def stream(
         self, event_type: Type[TStreamEvent], num_events: Optional[int] = None

@@ -207,6 +207,19 @@ class EndpointAPI(ABC):
         """
         ...
 
+    def subscribe_nowait(
+        self,
+        event_type: Type[TSubscribeEvent],
+        handler: Callable[[TSubscribeEvent], Union[Any, Awaitable[Any]]],
+    ) -> Subscription:
+        """
+        A sync compatible version of :meth:`~lahja.base.EndpointAPI.subscribe`
+
+        Instead of blocking the calling coroutine this function schedules the subscribe
+        and immediately returns.
+        """
+        ...
+
     @abstractmethod
     async def stream(
         self, event_type: Type[TStreamEvent], num_events: Optional[int] = None
