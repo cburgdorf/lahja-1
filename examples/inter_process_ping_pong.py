@@ -1,14 +1,14 @@
 import asyncio
+from dataclasses import dataclass
 import logging
 import multiprocessing
 
 from lahja import BaseEvent, AsyncioEndpoint, ConnectionConfig
 
 
+@dataclass
 class BaseExampleEvent(BaseEvent):
-    def __init__(self, payload):
-        super().__init__()
-        self.payload = payload
+    payload: str
 
 
 # Define two different events

@@ -1,5 +1,6 @@
 import asyncio
 import multiprocessing
+from dataclasses import dataclass
 
 from lahja import (
     AsyncioEndpoint,
@@ -9,11 +10,9 @@ from lahja import (
 )
 
 
+@dataclass
 class DeliverSomethingResponse(BaseEvent):
-    def __init__(self, payload):
-        super().__init__()
-        self.payload = payload
-
+    payload: str
 
 # Define request / response pair
 class GetSomethingRequest(BaseRequestResponseEvent[DeliverSomethingResponse]):

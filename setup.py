@@ -35,6 +35,9 @@ extras_require = {
     ],
     'snappy': [
         "python-snappy>=0.5.3,<1"
+    ],
+    'examples': [
+        "dataclasses>=0.6, <1;python_version<'3.7'"
     ]
 }
 
