@@ -89,7 +89,7 @@ class AsyncioConnection(ConnectionAPI):
         return cls(reader, writer)
 
     async def send_message(self, message: Msg) -> None:
-        pickled = pickle.dumps(message)
+        pickled = pickle.dumps(message, protocol=pickle.HIGHEST_PROTOCOL)
         size = len(pickled)
 
         try:
