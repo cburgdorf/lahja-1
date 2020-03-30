@@ -11,7 +11,6 @@ from typing import (  # noqa: F401
     Optional,
     Set,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -19,7 +18,7 @@ from lahja.exceptions import BindError
 from lahja.typing import RequestID
 
 if TYPE_CHECKING:
-    from lahja.base import EndpointAPI  # noqa: F401
+    from lahja.base import EndpointAPI, TResponse  # noqa: F401
 
 
 class Subscription:
@@ -82,9 +81,6 @@ class BaseEvent:
             return BroadcastConfig(internal=True, filter_event_id=self._id)
 
         return BroadcastConfig(filter_endpoint=self._origin, filter_event_id=self._id)
-
-
-TResponse = TypeVar("TResponse", bound=BaseEvent)
 
 
 class BaseRequestResponseEvent(ABC, BaseEvent, Generic[TResponse]):

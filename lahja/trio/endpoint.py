@@ -17,7 +17,6 @@ from typing import (
     Set,
     Tuple,
     Type,
-    TypeVar,
     Union,
     cast,
 )
@@ -700,8 +699,6 @@ class TrioEndpoint(BaseEndpoint):
             (None, item, config, None)
         )
 
-    TResponse = TypeVar("TResponse", bound=BaseEvent)
-
     async def request(
         self,
         item: BaseRequestResponseEvent[TResponse],
@@ -719,7 +716,7 @@ class TrioEndpoint(BaseEndpoint):
         request_id = next(self._get_request_id)
 
         # Create an asynchronous generator that we use to pipe the result
-        fut: Future[TResponse] = Future()  # type: ignore
+        fut: Future[BaseEvent] = Future()
 
         # place the send channel where the message processing loop can find it.
         self._pending_requests[request_id] = fut
@@ -736,8 +733,6 @@ class TrioEndpoint(BaseEndpoint):
             )
 
         return result
-
-    TSubscribeEvent = TypeVar("TSubscribeEvent", bound=BaseEvent)
 
     def subscribe(
         self,
@@ -764,8 +759,6 @@ class TrioEndpoint(BaseEndpoint):
         self._subscriptions_changed.set()
 
         return subscription
-
-    TStreamEvent = TypeVar("TStreamEvent", bound=BaseEvent)
 
     async def stream(
         self, event_type: Type[TStreamEvent], num_events: Optional[int] = None
